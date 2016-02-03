@@ -1,0 +1,98 @@
+#########################################################################################
+# Analyzing Categorical and Continuous Limited Dependent Variables with R               #
+#                                                                                       #
+# SSWR conference workshop                                                              #
+# Saturday, January 16, 2016                                                            #
+#                                                                                       #
+# Wendy Zeitlin, PhD, Yeshiva University, Charles Auerbach, PhD, Yeshiva University,    #
+# Matthew J. Cuellar, MSW, John G. Orme, PhD, University of Tennessee, Knoxville        #
+#########################################################################################
+
+#From Chapter 9--Making Your Case Using Logistic Regression With R, by Charles Auerbach & Wendy Zeitlin
+#Introduction:
+#Be sure to load the hospital1 data file
+table(hospital1$return30)
+#Run the constant-only binary logistic regression
+cons<-glm(return30~1, family="binomial",data=hospital1)
+#Use the summary() function to display the results of the binary logistic regression
+summary(cons)
+#Display the odds of returning within 30 days
+exp(coef(cons))
+
+#Be sure to install the gmodels package as the CrossTable function is part of this package
+require(gmodels)
+CrossTable( hospital1$spouse, hospital1$return30 ,prop.chisq=F, prop.r=F, 
+            prop.c=F, resid=F, prop.t=F, )
+#Run the logistic regression with a covariate
+sp<-glm(return30~  spouse , family="binomial",data=hospital1)
+summary(sp)
+#Display the odds ratio of returning without a spouse
+exp(coef(sp))
+#Display 95% CI
+exp(confint.default(sp))
+#Adding in more covariates...
+logit1 <- glm(return30 ~ tkatzmean  + spouse + age80 , family = "binomial",
+              data=hospital1)
+summary(logit1) 
+exp(coef(logit1))
+exp(confint.default(logit1))
+
+##########################
+#    Model Fit           #
+##########################
+
+# Calculate model chi-square by running null model and subtracting its deviance 
+#from the full model's deviance.
+chi<-logit1$null.deviance -logit1$deviance
+chi
+#Calculate degrees of freedom
+df<-logit1$df.null-logit1$df.residual
+df
+#Calculate the p-value
+pchisq(chi,df, lower.tail = FALSE)
+#Continue with Hosmer and Lemshow's goodness-of-fit test
+install.packages("ResourceSelection")
+require(ResourceSelection)
+#Create a data frame omitting missing values
+m1<-data.frame(na.omit(hospital1))
+#Recode return30 to a numeric varaible
+return<-ifelse(m1$return30=="yes",1,0)
+is.numeric(return)
+#Re-run the logistic, this time using the subset data
+gof<- glm(return30 ~ tkatzmean  + spouse + age80 , family = "binomial",data=m1)
+#Run the gof test
+hoslem.test(return,gof$fit)
+#age80 was not a significant predictor in our last model. Let's rerun it and remove age80
+logit2<-glm(return30~ tkatzmean + spouse, family="binomial",data=hospital1)
+summary(logit2)
+#Display odds ratios
+exp(coef(logit2))
+#Display 95% CI
+exp(confint(logit2))
+#Calculate model chi-square
+chi<-logit2$null.deviance -logit2$deviance
+chi
+#Calculate df
+df<-logit2$df.null-logit2$df.residual
+df
+#Calculate p-value
+pchisq(chi,df, lower.tail = FALSE)
+
+#Display diagnoistic plots
+#Install car package if needed
+require(car)
+residualPlots(logit2)
+avPlots(logit2) 
+
+#Now, let's try comparing probabilities between categories (those with a spouse v. those without)
+#Create a dataframe holding tkatzmean constant at the mean
+return.prob<-data.frame(tkatzmean=mean(hospital1$tkatzmean),spouse=(1:2))
+return.prob
+#Create a factor variable with the same levels as in the new data frame and append this variable
+#to the dataframe
+return.prob$spouse<-factor(return.prob$spouse,level=c(1,2),labels=c("yes","no"))
+#Calculate the probability of returning for each category and append the dataframe again
+return.prob$prob<-predict(logit2,newdata=return.prob,type="response")
+#Display the dataframe
+return.prob
+
